@@ -165,6 +165,47 @@ static void *internal_realloc(void *pointer, size_t size)
 
 static internal_hooks global_hooks = { internal_malloc, internal_free, internal_realloc };
 
+static void init_hooks(const cJSON_Hooks * const hooks, internal_hooks * const hooks_internal)
+{
+    if (hooks_internal == NULL)
+    {
+        return;
+    }
+
+    if (hooks == NULL)
+    {
+        /* use default */
+        hooks_internal->allocate = malloc;
+        hooks_internal->deallocate = free;
+        hooks_internal->reallocate = realloc;
+        return;
+    }
+
+    hooks_internal->allocate = malloc;
+    if (hooks->malloc_fn != NULL)
+    {
+        hooks_internal->allocate = hooks->malloc_fn;
+    }
+
+    hooks_internal->deallocate = free;
+    if (hooks->free_fn != NULL)
+    {
+        hooks_internal->deallocate = hooks->free_fn;
+    }
+
+    /* use realloc only if both free and malloc are used */
+    hooks_internal->reallocate = NULL;
+    if ((hooks->malloc_fn == malloc) && (hooks->free_fn == free))
+    {
+        hooks_internal->reallocate = realloc;
+    }
+}
+
+CJSON_PUBLIC(void) cJSON_InitHooks(cJSON_Hooks* hooks)
+{
+    init_hooks(hooks, &global_hooks);
+}
+
 static unsigned char* cJSON_strdup(const unsigned char* string, const internal_hooks * const hooks)
 {
     size_t length = 0;
@@ -184,37 +225,6 @@ static unsigned char* cJSON_strdup(const unsigned char* string, const internal_h
     memcpy(copy, string, length);
 
     return copy;
-}
-
-CJSON_PUBLIC(void) cJSON_InitHooks(cJSON_Hooks* hooks)
-{
-    if (hooks == NULL)
-    {
-        /* Reset hooks */
-        global_hooks.allocate = malloc;
-        global_hooks.deallocate = free;
-        global_hooks.reallocate = realloc;
-        return;
-    }
-
-    global_hooks.allocate = malloc;
-    if (hooks->malloc_fn != NULL)
-    {
-        global_hooks.allocate = hooks->malloc_fn;
-    }
-
-    global_hooks.deallocate = free;
-    if (hooks->free_fn != NULL)
-    {
-        global_hooks.deallocate = hooks->free_fn;
-    }
-
-    /* use realloc only if both free and malloc are used */
-    global_hooks.reallocate = NULL;
-    if ((global_hooks.allocate == malloc) && (global_hooks.deallocate == free))
-    {
-        global_hooks.reallocate = realloc;
-    }
 }
 
 /* Internal constructor. */
