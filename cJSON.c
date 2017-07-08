@@ -59,6 +59,10 @@
 #define true ((cJSON_bool)1)
 #define false ((cJSON_bool)0)
 
+#ifndef SIZE_MAX
+#define SIZE_MAX ((size_t)-1)
+#endif
+
 typedef struct {
     const unsigned char *json;
     size_t position;
@@ -204,6 +208,130 @@ static void init_hooks(const cJSON_Hooks * const hooks, internal_hooks * const h
 CJSON_PUBLIC(void) cJSON_InitHooks(cJSON_Hooks* hooks)
 {
     init_hooks(hooks, &global_hooks);
+}
+
+typedef struct internal_configuration {
+    size_t buffer;
+    cJSON_bool format;
+    cJSON_bool case_sensitive;
+    cJSON_bool allow_data_after_json;
+    internal_hooks hooks;
+} internal_configuration;
+
+static const internal_configuration default_configuration = {
+    256, /* buffer */
+    true, /* format */
+    true, /* case_sensitive */
+    true, /* allow_data_after_json */
+    { /* hooks */
+        internal_malloc,
+        internal_free,
+        internal_realloc
+    }
+};
+
+static size_t get_size_from_number(cJSON *number)
+{
+    if (number->valuedouble >= SIZE_MAX) {
+        return SIZE_MAX;
+    }
+
+    if (number->valuedouble <= 0) {
+        return 0;
+    }
+
+    return (size_t) number->valuedouble;
+}
+
+CJSON_PUBLIC(cJSON_Configuration) cJSON_CreateConfiguration(const cJSON * const json, const cJSON_Hooks * const hooks)
+{
+    internal_configuration *configuration = NULL;
+    cJSON *child = NULL;
+    internal_hooks hooks_internal[1];
+
+    init_hooks(hooks, hooks_internal);
+
+    if (!cJSON_IsObject(json))
+    {
+        goto fail;
+    }
+
+    configuration = (internal_configuration*) hooks_internal->allocate(sizeof(internal_configuration));
+    if (configuration == NULL)
+    {
+        goto fail;
+    }
+
+    /* initialize with the default */
+    *configuration = default_configuration;
+
+    /* then overwrite with other options if they exist */
+
+    child = get_object_item(json, "buffer", true);
+    if (cJSON_IsNumber(child))
+    {
+        configuration->buffer = get_size_from_number(child);
+    }
+
+    child = get_object_item(json, "format", true);
+    if (cJSON_IsTrue(child))
+    {
+        configuration->format = true;
+    }
+    else if (cJSON_IsFalse(child))
+    {
+        configuration->format = false;
+    }
+
+    child = get_object_item(json, "case_sensitive", true);
+    if (cJSON_IsTrue(child))
+    {
+        configuration->case_sensitive = true;
+    }
+    else if (cJSON_IsFalse(child))
+    {
+        configuration->case_sensitive = false;
+    }
+
+    child = get_object_item(json, "allow_data_after_json", true);
+    if (cJSON_IsTrue(child))
+    {
+        configuration->allow_data_after_json = true;
+    }
+    else if (cJSON_IsFalse(child))
+    {
+        configuration->allow_data_after_json = false;
+    }
+
+    configuration->hooks = *hooks_internal;
+
+    return (cJSON_Configuration) configuration;
+
+fail:
+    if (configuration != NULL)
+    {
+        hooks_internal->deallocate(configuration);
+    }
+
+    return NULL;
+}
+
+CJSON_PUBLIC(void) cJSON_DeleteConfiguration(cJSON_Configuration configuration)
+{
+    void (*deallocate)(void *) = global_hooks.deallocate;
+    internal_configuration *internal_config = (internal_configuration*) configuration;
+
+    if (internal_config == NULL)
+    {
+        return;
+    }
+
+    if (internal_config->hooks.deallocate != NULL)
+    {
+        deallocate = internal_config->hooks.deallocate;
+    }
+
+    deallocate(configuration);
 }
 
 static unsigned char* cJSON_strdup(const unsigned char* string, const internal_hooks * const hooks)

@@ -434,6 +434,91 @@ static void skip_utf8_bom_should_not_skip_bom_if_not_at_beginning(void)
     TEST_ASSERT_NULL(skip_utf8_bom(&buffer));
 }
 
+static void create_configuration_should_create_a_configuration(void)
+{
+    cJSON *configuration_json = NULL;
+    internal_configuration *configuration = NULL;
+
+    configuration_json = cJSON_Parse("{\"buffer\":1024,\"format\":false,\"case_sensitive\":false,\"allow_data_after_json\":false}");
+    TEST_ASSERT_NOT_NULL(configuration_json);
+    configuration = (internal_configuration*) cJSON_CreateConfiguration(configuration_json, NULL);
+    cJSON_Delete(configuration_json);
+    configuration_json = NULL;
+    TEST_ASSERT_NOT_NULL(configuration);
+    TEST_ASSERT_TRUE_MESSAGE(configuration->buffer == 1024, "buffer has an incorrect value");
+    TEST_ASSERT_TRUE_MESSAGE(configuration->format == false, "format has an incorrect value");
+    TEST_ASSERT_TRUE_MESSAGE(configuration->case_sensitive == false, "case_sensitive has an incorrect value");
+    TEST_ASSERT_TRUE_MESSAGE(configuration->allow_data_after_json == false, "allow_data_after_json has an incorrect value");
+    TEST_ASSERT_TRUE_MESSAGE(&malloc == configuration->hooks.allocate, "Wrong malloc.");
+    TEST_ASSERT_TRUE_MESSAGE(&free == configuration->hooks.deallocate, "Wrong free.");
+    TEST_ASSERT_TRUE_MESSAGE(&realloc == configuration->hooks.reallocate, "Wrong realloc.");
+
+    cJSON_DeleteConfiguration(configuration);
+}
+
+static void create_configuration_should_work_with_empty_object(void)
+{
+    cJSON *configuration_json = NULL;
+    internal_configuration *configuration = NULL;
+
+    configuration_json = cJSON_Parse("{}");
+    TEST_ASSERT_NOT_NULL(configuration_json);
+    configuration = (internal_configuration*) cJSON_CreateConfiguration(configuration_json, NULL);
+    cJSON_Delete(configuration_json);
+    configuration_json = NULL;
+    TEST_ASSERT_NOT_NULL(configuration);
+    TEST_ASSERT_TRUE_MESSAGE(configuration->buffer == 256, "buffer has an incorrect value");
+    TEST_ASSERT_TRUE_MESSAGE(configuration->format == true, "format has an incorrect value");
+    TEST_ASSERT_TRUE_MESSAGE(configuration->case_sensitive == true, "case_sensitive has an incorrect value");
+    TEST_ASSERT_TRUE_MESSAGE(configuration->allow_data_after_json == true, "allow_data_after_json has an incorrect value");
+    TEST_ASSERT_TRUE_MESSAGE(&malloc == configuration->hooks.allocate, "Wrong malloc.");
+    TEST_ASSERT_TRUE_MESSAGE(&free == configuration->hooks.deallocate, "Wrong free.");
+    TEST_ASSERT_TRUE_MESSAGE(&realloc == configuration->hooks.reallocate, "Wrong realloc.");
+
+    cJSON_DeleteConfiguration(configuration);
+}
+
+/* custom allocator for testing cJSON_CreateConfiguration */
+static void *custom_allocator(size_t size)
+{
+    void *object = malloc(size + sizeof(internal_configuration));
+    if (object == NULL)
+    {
+        return NULL;
+    }
+
+    return (void*) (((unsigned char*)object) + sizeof(internal_configuration));
+}
+
+/* custom deallocator for testing cJSON_CreateConfiguration */
+static void custom_deallocator(void *object)
+{
+    if (object == NULL)
+    {
+        return;
+    }
+
+    free(((unsigned char*)object) - sizeof(internal_configuration));
+}
+
+static void create_configuration_should_take_custom_allocators(void)
+{
+    cJSON *configuration_json = NULL;
+    internal_configuration *configuration = NULL;
+    cJSON_Hooks hooks = {&custom_allocator, &custom_deallocator};
+
+    configuration_json = cJSON_Parse("{}");
+    TEST_ASSERT_NOT_NULL(configuration_json);
+    configuration = (internal_configuration*) cJSON_CreateConfiguration(configuration_json, &hooks);
+    cJSON_Delete(configuration_json);
+    TEST_ASSERT_NOT_NULL(configuration);
+    TEST_ASSERT_TRUE_MESSAGE(&custom_allocator == configuration->hooks.allocate, "Wrong malloc.");
+    TEST_ASSERT_TRUE_MESSAGE(&custom_deallocator == configuration->hooks.deallocate, "Wrong free.");
+    TEST_ASSERT_NULL_MESSAGE(configuration->hooks.reallocate, "Realloc shouldn't exist.");
+
+    cJSON_DeleteConfiguration(configuration);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -451,6 +536,9 @@ int main(void)
     RUN_TEST(cjson_functions_shouldnt_crash_with_null_pointers);
     RUN_TEST(skip_utf8_bom_should_skip_bom);
     RUN_TEST(skip_utf8_bom_should_not_skip_bom_if_not_at_beginning);
+    RUN_TEST(create_configuration_should_create_a_configuration);
+    RUN_TEST(create_configuration_should_work_with_empty_object);
+    RUN_TEST(create_configuration_should_take_custom_allocators);
 
     return UNITY_END();
 }

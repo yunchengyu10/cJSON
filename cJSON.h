@@ -132,6 +132,35 @@ then using the CJSON_API_VISIBILITY flag to "export" the same symbols the way CJ
 /* returns the version of cJSON as a string */
 CJSON_PUBLIC(const char*) cJSON_Version(void);
 
+typedef void * cJSON_Configuration;
+/* Create a configuration object that can be passed to several functions
+ * to configure their behavior.
+ * A configuration is given in JSON form (case sensitive) and can optionally contain any
+ * of the following options:
+ * - buffer: number of bytes that the printbuffer should be initially
+ *           NOTE: This cannot be bigger than UINT_MAX (since SIZE_MAX doesn't exist in C89)
+ * - format: boolean that indicates if the output should be formatted
+ * - case_sensitive: boolean that indicates if object keys should be considered case_sensitive
+ * - allow_data_after_json: boolean that indicates if parsing succeeds if the JSON in the
+ *                          input is followed by non JSON data
+ *
+ * A cJSON_Configuration object has to be freed with cJSON_free after it is not used anymore.
+ *
+ * If NULL is passed to a function that expects an object of type cJSON_Configuration,
+ * the following default configuration is used:
+ * {
+ *  "buffer": 256,
+ *  "format": true,
+ *  "case_sensitive": true,
+ *  "allow_data_after_json": true
+ * }
+ *
+ * NOTE: hooks can be NULL, in that case the default malloc and free are used. In any case
+ * the allocators are stored inside of the cJSON_Configuration object.
+ * */
+CJSON_PUBLIC(cJSON_Configuration) cJSON_CreateConfiguration(const cJSON * const json, const cJSON_Hooks * const hooks);
+CJSON_PUBLIC(void) cJSON_DeleteConfiguration(cJSON_Configuration configuration);
+
 /* Supply malloc, realloc and free functions to cJSON */
 CJSON_PUBLIC(void) cJSON_InitHooks(cJSON_Hooks* hooks);
 
